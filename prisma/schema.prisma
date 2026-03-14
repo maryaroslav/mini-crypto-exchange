@@ -1,0 +1,50 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Wallet {
+  id           String       @id @default(uuid())
+  name         String
+  fiatBalance  Float        @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  assets       Asset[]
+  tradeOrders  TradeOrder[]
+}
+
+model Asset {
+  id        String   @id @default(uuid())
+  symbol    String   // e.g. "BTC", "ETH"
+  quantity  Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  walletId  String
+  wallet    Wallet   @relation(fields: [walletId], references: [id])
+
+  @@unique([walletId, symbol])
+}
+
+model TradeOrder {
+  id          String      @id @default(uuid())
+  symbol      String      // e.g. "BTC"
+  type        String      // "BUY" | "SELL"
+  quantity    Float
+  targetPrice Float
+  status      String      @default("PENDING") // "PENDING" | "COMPLETED" | "CANCELLED"
+  commission  Float       @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  walletId    String
+  wallet      Wallet      @relation(fields: [walletId], references: [id])
+}
