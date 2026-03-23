@@ -4,6 +4,7 @@ import { InsufficientFundsError } from '../../errors/AppError';
 
 jest.mock('../../lib/prisma', () => ({
   prisma: {
+    $transaction: jest.fn(),
     wallet: {
       findUnique: jest.fn(),
     },
@@ -244,6 +245,131 @@ describe('TradeOrderService – BR4: order status based on market price', () => 
       const order = await service.createOrder(dto);
 
       expect(order.status).toBe('COMPLETED');
+    });
+  });
+});
+
+describe('TradeOrderService – BR5: transactional balance update', () => {
+  let service: TradeOrderService;
+
+  const mockTx = {
+    wallet: { update: jest.fn() },
+    asset: {
+      upsert: jest.fn(),
+      update: jest.fn(),
+    },
+    tradeOrder: { create: jest.fn() },
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new TradeOrderService(mockPriceProvider);
+
+    (prisma.$transaction as jest.Mock).mockImplementation(
+      (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx),
+    );
+  });
+
+  describe('BUY order that becomes COMPLETED', () => {
+    const buyDto = {
+      walletId: WALLET_ID,
+      symbol: 'BTC',
+      type: 'BUY' as const,
+      quantity: 2,
+      targetPrice: 100,
+    };
+
+    beforeEach(() => {
+      (prisma.wallet.findUnique as jest.Mock).mockResolvedValue(
+        makeWallet(500),
+      );
+      mockPriceProvider.getCurrentPrice.mockResolvedValue(90);
+      mockTx.tradeOrder.create.mockResolvedValue({ id: 'o5', status: 'COMPLETED' });
+    });
+
+    it('calls prisma.$transaction when order is COMPLETED', async () => {
+      await service.createOrder(buyDto);
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('decrements wallet fiatBalance by totalCost + commission on BUY', async () => {
+      await service.createOrder(buyDto);
+      expect(mockTx.wallet.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: WALLET_ID },
+          data: { fiatBalance: { decrement: 202 } },
+        }),
+      );
+    });
+
+    it('upserts asset with incremented quantity on BUY', async () => {
+      await service.createOrder(buyDto);
+      expect(mockTx.asset.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { walletId_symbol: { walletId: WALLET_ID, symbol: 'BTC' } },
+          update: { quantity: { increment: 2 } },
+          create: { walletId: WALLET_ID, symbol: 'BTC', quantity: 2 },
+        }),
+      );
+    });
+  });
+
+  describe('SELL order that becomes COMPLETED', () => {
+    const sellDto = {
+      walletId: WALLET_ID,
+      symbol: 'ETH',
+      type: 'SELL' as const,
+      quantity: 3,
+      targetPrice: 200,
+    };
+
+    beforeEach(() => {
+      (prisma.wallet.findUnique as jest.Mock).mockResolvedValue(
+        makeWallet(0, [{ symbol: 'ETH', quantity: 5 }]),
+      );
+      mockPriceProvider.getCurrentPrice.mockResolvedValue(250);
+      mockTx.tradeOrder.create.mockResolvedValue({ id: 'o6', status: 'COMPLETED' });
+    });
+
+    it('calls prisma.$transaction when order is COMPLETED', async () => {
+      await service.createOrder(sellDto);
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('increments wallet fiatBalance by totalCost - commission on SELL', async () => {
+      await service.createOrder(sellDto);
+      expect(mockTx.wallet.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: WALLET_ID },
+          data: { fiatBalance: { increment: 594 } },
+        }),
+      );
+    });
+
+    it('decrements asset quantity on SELL', async () => {
+      await service.createOrder(sellDto);
+      expect(mockTx.asset.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { walletId_symbol: { walletId: WALLET_ID, symbol: 'ETH' } },
+          data: { quantity: { decrement: 3 } },
+        }),
+      );
+    });
+  });
+
+  describe('PENDING order — no transaction', () => {
+    it('does NOT call prisma.$transaction when order stays PENDING', async () => {
+      (prisma.wallet.findUnique as jest.Mock).mockResolvedValue(
+        makeWallet(500),
+      );
+      mockPriceProvider.getCurrentPrice.mockResolvedValue(99999);
+      (prisma.tradeOrder.create as jest.Mock).mockResolvedValue({ id: 'o7', status: 'PENDING' });
+
+      await service.createOrder({
+        walletId: WALLET_ID, symbol: 'BTC', type: 'BUY', quantity: 1, targetPrice: 100,
+      });
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 });
