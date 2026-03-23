@@ -29,6 +29,15 @@ export class TradeOrderService {
       );
     }
 
+    if (dto.type === 'SELL') {
+      const asset = wallet.assets.find((a) => a.symbol === dto.symbol);
+      if (!asset || asset.quantity < dto.quantity) {
+        throw new InsufficientFundsError(
+          `Insufficient ${dto.symbol} balance. Required: ${dto.quantity}, Available: ${asset?.quantity ?? 0}`,
+        );
+      }
+    }
+
     const currentPrice = await this.priceProvider.getCurrentPrice(dto.symbol);
     const isCompleted = dto.type === 'BUY'
       ? currentPrice <= dto.targetPrice
