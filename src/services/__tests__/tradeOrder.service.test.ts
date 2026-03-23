@@ -1,4 +1,4 @@
-import { TradeOrderService } from '../tradeOrder.service';
+import { TradeOrderService, calculateCommission } from '../tradeOrder.service';
 import { PriceProvider } from '../../lib/priceProvider';
 import { InsufficientFundsError } from '../../errors/AppError';
 
@@ -141,5 +141,32 @@ describe('TradeOrderService', () => {
 
       await expect(service.createOrder(dto)).resolves.toBeDefined();
     });
+  });
+});
+
+describe('calculateCommission', () => {
+  it('applies 1% commission when trade total is <= 1000', () => {
+    // 5 units × 100 USD = 500 USD  →  1% of 500 = 5
+    expect(calculateCommission(5, 100)).toBeCloseTo(5);
+  });
+
+  it('applies 1% commission when trade total is exactly 1000', () => {
+    // boundary: 1000 is NOT > 1000, so still 1%
+    expect(calculateCommission(10, 100)).toBeCloseTo(10);
+  });
+
+  it('applies 0.2% commission when trade total is > 1000', () => {
+    // 2 × 600 = 1200 USD  →  0.2% of 1200 = 2.4
+    expect(calculateCommission(2, 600)).toBeCloseTo(2.4);
+  });
+
+  it('applies 0.2% commission on a large trade', () => {
+    // 1 × 50000 = 50000 USD  →  0.2% of 50000 = 100
+    expect(calculateCommission(1, 50000)).toBeCloseTo(100);
+  });
+
+  it('boundary: 1000.01 triggers the reduced 0.2% rate', () => {
+    // slightly above 1000 → 0.2%
+    expect(calculateCommission(1, 1000.01)).toBeCloseTo(1000.01 * 0.002);
   });
 });
