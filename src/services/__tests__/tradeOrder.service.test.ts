@@ -144,7 +144,7 @@ describe('TradeOrderService', () => {
   });
 });
 
-describe('calculateCommission', () => {
+describe('BR3 - calculateCommission', () => {
   it('applies 1% commission when trade total is <= 1000', () => {
     // 5 units × 100 USD = 500 USD  →  1% of 500 = 5
     expect(calculateCommission(5, 100)).toBeCloseTo(5);
@@ -168,5 +168,82 @@ describe('calculateCommission', () => {
   it('boundary: 1000.01 triggers the reduced 0.2% rate', () => {
     // slightly above 1000 → 0.2%
     expect(calculateCommission(1, 1000.01)).toBeCloseTo(1000.01 * 0.002);
+  });
+});
+
+describe('TradeOrderService – BR4: order status based on market price', () => {
+  let service: TradeOrderService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new TradeOrderService(mockPriceProvider);
+  });
+
+  describe('BUY orders', () => {
+    it('creates PENDING order when current price is ABOVE target (market too expensive)', async () => {
+      (prisma.wallet.findUnique as jest.Mock).mockResolvedValue(
+        makeWallet(100_000),
+      );
+      mockPriceProvider.getCurrentPrice.mockResolvedValue(35_000);
+      (prisma.tradeOrder.create as jest.Mock).mockImplementation(
+        ({ data }: { data: { status: string } }) => Promise.resolve({ id: 'o1', ...data }),
+      );
+
+      const dto = { walletId: WALLET_ID, symbol: 'BTC', type: 'BUY' as const, quantity: 1, targetPrice: 30_000 };
+
+      const order = await service.createOrder(dto);
+
+      expect(order.status).toBe('PENDING');
+    });
+
+    it('creates COMPLETED order when current price is AT or BELOW target (good deal)', async () => {
+      (prisma.wallet.findUnique as jest.Mock).mockResolvedValue(
+        makeWallet(100_000),
+      );
+      mockPriceProvider.getCurrentPrice.mockResolvedValue(28_000);
+      (prisma.tradeOrder.create as jest.Mock).mockImplementation(
+        ({ data }: { data: { status: string } }) => Promise.resolve({ id: 'o2', ...data }),
+      );
+
+      const dto = { walletId: WALLET_ID, symbol: 'BTC', type: 'BUY' as const, quantity: 1, targetPrice: 30_000 };
+
+      const order = await service.createOrder(dto);
+
+      expect(order.status).toBe('COMPLETED');
+    });
+  });
+
+  describe('SELL orders', () => {
+    it('creates PENDING order when current price is BELOW target (not profitable yet)', async () => {
+      (prisma.wallet.findUnique as jest.Mock).mockResolvedValue(
+        makeWallet(0, [{ symbol: 'BTC', quantity: 2 }]),
+      );
+      mockPriceProvider.getCurrentPrice.mockResolvedValue(28_000);
+      (prisma.tradeOrder.create as jest.Mock).mockImplementation(
+        ({ data }: { data: { status: string } }) => Promise.resolve({ id: 'o3', ...data }),
+      );
+
+      const dto = { walletId: WALLET_ID, symbol: 'BTC', type: 'SELL' as const, quantity: 1, targetPrice: 30_000 };
+
+      const order = await service.createOrder(dto);
+
+      expect(order.status).toBe('PENDING');
+    });
+
+    it('creates COMPLETED order when current price is AT or ABOVE target (sold!)', async () => {
+      (prisma.wallet.findUnique as jest.Mock).mockResolvedValue(
+        makeWallet(0, [{ symbol: 'BTC', quantity: 2 }]),
+      );
+      mockPriceProvider.getCurrentPrice.mockResolvedValue(32_000);
+      (prisma.tradeOrder.create as jest.Mock).mockImplementation(
+        ({ data }: { data: { status: string } }) => Promise.resolve({ id: 'o4', ...data }),
+      );
+
+      const dto = { walletId: WALLET_ID, symbol: 'BTC', type: 'SELL' as const, quantity: 1, targetPrice: 30_000 };
+
+      const order = await service.createOrder(dto);
+
+      expect(order.status).toBe('COMPLETED');
+    });
   });
 });
