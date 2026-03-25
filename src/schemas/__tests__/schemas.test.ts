@@ -1,6 +1,5 @@
 import { CreateWalletSchema, CreateTradeOrderSchema } from '../index';
 
-// ── CreateWalletSchema ────────────────────────────────────────────────────────
 describe('CreateWalletSchema', () => {
   describe('valid inputs', () => {
     it('accepts a name with a positive fiatBalance', () => {
@@ -44,11 +43,10 @@ describe('CreateWalletSchema', () => {
   });
 });
 
-// ── CreateTradeOrderSchema ────────────────────────────────────────────────────
 describe('CreateTradeOrderSchema', () => {
   const validOrder = {
     walletId: '123e4567-e89b-12d3-a456-426614174000',
-    symbol: 'btc',        // lowercase — schema transforms to uppercase
+    symbol: 'btc',
     type: 'BUY',
     quantity: 1,
     targetPrice: 30000,
