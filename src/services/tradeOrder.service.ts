@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma';
 import { PriceProvider } from '../lib/priceProvider';
 import { CreateTradeOrderDTO } from '../schemas';
 import { InsufficientFundsError, NotFoundError } from '../errors/AppError';
-import { TradeOrder } from '@prisma/client';
+import { TradeOrder, Asset } from '@prisma/client';
 
 export function calculateCommission(quantity: number, price: number): number {
   const total = quantity * price;
@@ -23,20 +23,7 @@ export class TradeOrderService {
     const totalCost = dto.quantity * dto.targetPrice;
     const commission = calculateCommission(dto.quantity, dto.targetPrice);
 
-    if (dto.type === 'BUY' && wallet.fiatBalance < totalCost + commission) {
-      throw new InsufficientFundsError(
-        `Insufficient fiat balance. Required: ${totalCost + commission}, Available: ${wallet.fiatBalance}`,
-      );
-    }
-
-    if (dto.type === 'SELL') {
-      const asset = wallet.assets.find((a) => a.symbol === dto.symbol);
-      if (!asset || asset.quantity < dto.quantity) {
-        throw new InsufficientFundsError(
-          `Insufficient ${dto.symbol} balance. Required: ${dto.quantity}, Available: ${asset?.quantity ?? 0}`,
-        );
-      }
-    }
+    this.validateOrder(dto, totalCost, commission, wallet.fiatBalance, wallet.assets);
 
     const currentPrice = await this.priceProvider.getCurrentPrice(dto.symbol);
     const isCompleted = dto.type === 'BUY'
@@ -93,6 +80,29 @@ export class TradeOrderService {
         status: 'PENDING',
       },
     });
+  }
+
+  private validateOrder(
+    dto: CreateTradeOrderDTO,
+    totalCost: number,
+    commission: number,
+    fiatBalance: number,
+    assets: Asset[],
+  ): void {
+    if (dto.type === 'BUY' && fiatBalance < totalCost + commission) {
+      throw new InsufficientFundsError(
+        `Insufficient fiat balance. Required: ${totalCost + commission}, Available: ${fiatBalance}`,
+      );
+    }
+
+    if (dto.type === 'SELL') {
+      const asset = assets.find((a) => a.symbol === dto.symbol);
+      if (!asset || asset.quantity < dto.quantity) {
+        throw new InsufficientFundsError(
+          `Insufficient ${dto.symbol} balance. Required: ${dto.quantity}, Available: ${asset?.quantity ?? 0}`,
+        );
+      }
+    }
   }
 
   async getOrderById(id: string): Promise<TradeOrder> {
