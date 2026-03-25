@@ -1,7 +1,3 @@
-/**
- * Runs once before all test suites.
- * Creates and migrates the test SQLite database.
- */
 import { execSync } from 'child_process';
 
 export default async function globalSetup() {

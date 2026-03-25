@@ -25,7 +25,6 @@ const config: Config = {
   globalSetup: './jest.globalSetup.ts',
   globalTeardown: './jest.globalTeardown.ts',
 
-  // Set DATABASE_URL for every test worker process
   setupFiles: ['<rootDir>/jest.envSetup.ts'],
 
   clearMocks: true,

@@ -4,7 +4,6 @@ import { prisma } from '../../lib/prisma';
 
 const app = createApp();
 
-// Clean database between tests so they are independent
 afterEach(async () => {
   await prisma.tradeOrder.deleteMany();
   await prisma.asset.deleteMany();
@@ -15,7 +14,6 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-// ── POST /wallets ─────────────────────────────────────────────────────────────
 describe('POST /wallets', () => {
   it('201 — creates a wallet and returns it', async () => {
     const res = await request(app)
@@ -66,10 +64,8 @@ describe('POST /wallets', () => {
   });
 });
 
-// ── GET /wallets/:id ─────────────────────────────────────────────────────────
 describe('GET /wallets/:id', () => {
   it('200 — returns wallet with empty assets array', async () => {
-    // Arrange: create a wallet first
     const created = await prisma.wallet.create({
       data: { name: 'Dana', fiatBalance: 1000 },
     });
@@ -86,7 +82,6 @@ describe('GET /wallets/:id', () => {
   });
 
   it('200 — returns wallet with its assets', async () => {
-    // Arrange: wallet with one asset
     const wallet = await prisma.wallet.create({
       data: {
         name: 'Eve',
