@@ -43,6 +43,45 @@ export class TradeOrderService {
       ? currentPrice <= dto.targetPrice
       : currentPrice >= dto.targetPrice;
 
+    if (isCompleted) {
+      return prisma.$transaction(async (tx) => {
+        const totalCost = dto.quantity * dto.targetPrice;
+
+        if (dto.type === 'BUY') {
+          await tx.wallet.update({
+            where: { id: dto.walletId },
+            data: { fiatBalance: { decrement: totalCost + commission } },
+          });
+          await tx.asset.upsert({
+            where: { walletId_symbol: { walletId: dto.walletId, symbol: dto.symbol } },
+            update: { quantity: { increment: dto.quantity } },
+            create: { walletId: dto.walletId, symbol: dto.symbol, quantity: dto.quantity },
+          });
+        } else {
+          await tx.wallet.update({
+            where: { id: dto.walletId },
+            data: { fiatBalance: { increment: totalCost - commission } },
+          });
+          await tx.asset.update({
+            where: { walletId_symbol: { walletId: dto.walletId, symbol: dto.symbol } },
+            data: { quantity: { decrement: dto.quantity } },
+          });
+        }
+
+        return tx.tradeOrder.create({
+          data: {
+            walletId: dto.walletId,
+            symbol: dto.symbol,
+            type: dto.type,
+            quantity: dto.quantity,
+            targetPrice: dto.targetPrice,
+            commission,
+            status: 'COMPLETED',
+          },
+        });
+      });
+    }
+
     return prisma.tradeOrder.create({
       data: {
         walletId: dto.walletId,
@@ -51,7 +90,7 @@ export class TradeOrderService {
         quantity: dto.quantity,
         targetPrice: dto.targetPrice,
         commission,
-        status: isCompleted ? 'COMPLETED' : 'PENDING',
+        status: 'PENDING',
       },
     });
   }
