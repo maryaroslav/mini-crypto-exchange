@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma';
 import { PriceProvider } from '../lib/priceProvider';
 import { CreateTradeOrderDTO } from '../schemas';
 import { InsufficientFundsError, NotFoundError } from '../errors/AppError';
-import { TradeOrder, Asset } from '@prisma/client';
+import { TradeOrder, Asset, Prisma } from '@prisma/client';
 
 export function calculateCommission(quantity: number, price: number): number {
   const total = quantity * price;
@@ -54,32 +54,27 @@ export class TradeOrderService {
             data: { quantity: { decrement: dto.quantity } },
           });
         }
-
-        return tx.tradeOrder.create({
-          data: {
-            walletId: dto.walletId,
-            symbol: dto.symbol,
-            type: dto.type,
-            quantity: dto.quantity,
-            targetPrice: dto.targetPrice,
-            commission,
-            status: 'COMPLETED',
-          },
-        });
+        return tx.tradeOrder.create({ data: this.buildOrderData(dto, commission, 'COMPLETED') });
       });
     }
 
-    return prisma.tradeOrder.create({
-      data: {
-        walletId: dto.walletId,
-        symbol: dto.symbol,
-        type: dto.type,
-        quantity: dto.quantity,
-        targetPrice: dto.targetPrice,
-        commission,
-        status: 'PENDING',
-      },
-    });
+    return prisma.tradeOrder.create({ data: this.buildOrderData(dto, commission, 'PENDING') });
+  }
+
+  private buildOrderData(
+    dto: CreateTradeOrderDTO,
+    commission: number,
+    status: string,
+  ): Prisma.TradeOrderCreateInput {
+    return {
+      wallet: { connect: { id: dto.walletId } },
+      symbol: dto.symbol,
+      type: dto.type,
+      quantity: dto.quantity,
+      targetPrice: dto.targetPrice,
+      commission,
+      status,
+    };
   }
 
   private validateOrder(
