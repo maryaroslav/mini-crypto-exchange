@@ -202,9 +202,7 @@ describe('TradeOrderService – BR4: order status based on market price', () => 
         makeWallet(100_000),
       );
       mockPriceProvider.getCurrentPrice.mockResolvedValue(28_000);
-      (prisma.tradeOrder.create as jest.Mock).mockImplementation(
-        ({ data }: { data: { status: string } }) => Promise.resolve({ id: 'o2', ...data }),
-      );
+      (prisma.$transaction as jest.Mock).mockResolvedValue({ id: 'o2', status: 'COMPLETED' });
 
       const dto = { walletId: WALLET_ID, symbol: 'BTC', type: 'BUY' as const, quantity: 1, targetPrice: 30_000 };
 
@@ -236,9 +234,7 @@ describe('TradeOrderService – BR4: order status based on market price', () => 
         makeWallet(0, [{ symbol: 'BTC', quantity: 2 }]),
       );
       mockPriceProvider.getCurrentPrice.mockResolvedValue(32_000);
-      (prisma.tradeOrder.create as jest.Mock).mockImplementation(
-        ({ data }: { data: { status: string } }) => Promise.resolve({ id: 'o4', ...data }),
-      );
+      (prisma.$transaction as jest.Mock).mockResolvedValue({ id: 'o4', status: 'COMPLETED' });
 
       const dto = { walletId: WALLET_ID, symbol: 'BTC', type: 'SELL' as const, quantity: 1, targetPrice: 30_000 };
 
