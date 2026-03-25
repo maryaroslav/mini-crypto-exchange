@@ -16,4 +16,5 @@ export const CreateTradeOrderSchema = z.object({
   quantity: z.number().positive('Quantity must be > 0'),
   targetPrice: z.number().positive('Target price must be > 0'),
 });
+
 export type CreateTradeOrderDTO = z.infer<typeof CreateTradeOrderSchema>;
