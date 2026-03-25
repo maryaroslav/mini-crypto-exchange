@@ -31,34 +31,41 @@ export class TradeOrderService {
       : currentPrice >= dto.targetPrice;
 
     if (isCompleted) {
-      return prisma.$transaction(async (tx) => {
-        const totalCost = dto.quantity * dto.targetPrice;
-
-        if (dto.type === 'BUY') {
-          await tx.wallet.update({
-            where: { id: dto.walletId },
-            data: { fiatBalance: { decrement: totalCost + commission } },
-          });
-          await tx.asset.upsert({
-            where: { walletId_symbol: { walletId: dto.walletId, symbol: dto.symbol } },
-            update: { quantity: { increment: dto.quantity } },
-            create: { walletId: dto.walletId, symbol: dto.symbol, quantity: dto.quantity },
-          });
-        } else {
-          await tx.wallet.update({
-            where: { id: dto.walletId },
-            data: { fiatBalance: { increment: totalCost - commission } },
-          });
-          await tx.asset.update({
-            where: { walletId_symbol: { walletId: dto.walletId, symbol: dto.symbol } },
-            data: { quantity: { decrement: dto.quantity } },
-          });
-        }
-        return tx.tradeOrder.create({ data: this.buildOrderData(dto, commission, 'COMPLETED') });
-      });
+      return this.executeCompletedOrder(dto, totalCost, commission);
     }
 
     return prisma.tradeOrder.create({ data: this.buildOrderData(dto, commission, 'PENDING') });
+  }
+
+  private async executeCompletedOrder(
+    dto: CreateTradeOrderDTO,
+    totalCost: number,
+    commission: number,
+  ): Promise<TradeOrder> {
+    return prisma.$transaction(async (tx) => {
+      if (dto.type === 'BUY') {
+        await tx.wallet.update({
+          where: { id: dto.walletId },
+          data: { fiatBalance: { decrement: totalCost + commission } },
+        });
+        await tx.asset.upsert({
+          where: { walletId_symbol: { walletId: dto.walletId, symbol: dto.symbol } },
+          update: { quantity: { increment: dto.quantity } },
+          create: { walletId: dto.walletId, symbol: dto.symbol, quantity: dto.quantity },
+        });
+      } else {
+        await tx.wallet.update({
+          where: { id: dto.walletId },
+          data: { fiatBalance: { increment: totalCost - commission } },
+        });
+        await tx.asset.update({
+          where: { walletId_symbol: { walletId: dto.walletId, symbol: dto.symbol } },
+          data: { quantity: { decrement: dto.quantity } },
+        });
+      }
+
+      return tx.tradeOrder.create({ data: this.buildOrderData(dto, commission, 'COMPLETED') });
+    });
   }
 
   private buildOrderData(
