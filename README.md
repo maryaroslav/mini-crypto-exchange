@@ -67,7 +67,7 @@ src/
 ### Instalace
 
 ```bash
-git clone <url>
+git clone https://github.com/maryaroslav/mini-crypto-exchange
 cd mini-crypto-exchange
 npm install
 ```
