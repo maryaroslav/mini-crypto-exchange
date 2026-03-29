@@ -72,6 +72,12 @@ cd mini-crypto-exchange
 npm install
 ```
 
+### .env
+
+```bash
+DATABASE_URL="file:./dev.db"
+```
+
 ### Databáze
 
 ```bash
